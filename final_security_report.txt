@@ -1,0 +1,40 @@
+🔒 Running MoneyMaker Security Audit...
+==================================================
+
+📊 AUDIT SUMMARY
+================
+✅ Passed checks: 14
+⚠️  Total issues: 1
+🔴 High severity: 1
+🟡 Medium severity: 0
+🔵 Low severity: 0
+💡 Recommendations: 0
+
+🚨 SECURITY ISSUES
+==================
+🔴 [HIGH] Sensitive Files: Potentially sensitive file found: logs/security.log
+   📁 File: logs/security.log
+
+✅ PASSED CHECKS
+================
+✓ Gitignore security patterns
+✓ Flask debug mode disabled
+✓ Flask secret key configured
+✓ CSRF protection enabled
+✓ Rate limiting configured
+✓ Security headers configured
+✓ Input validation decorators found
+✓ Regex input validation implemented
+✓ Sensitive data filtering in logs
+✓ Log rotation configured
+✓ All dependencies version pinned
+✓ Security packages present
+✓ Environment configuration complete
+✓ Production debug mode default
+
+🎯 SECURITY SCORE: 93.3/100
+🟢 Excellent security posture!
+
+📄 Full report saved to: security_audit_report.json
+
+❌ Audit failed: 1 high severity issue(s) found
