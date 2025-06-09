@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
 *.so
 .Python
 build/
@@ -46,16 +47,73 @@ ehthumbs.db
 Thumbs.db
 
 # Logs
-logs/
 *.log
+logs/
 
-# Environment configuration
+# Environment variables and secrets
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# Security sensitive files
+# API Keys and sensitive config
+config.ini
+secrets.json
+secrets*
 *.key
+*.pem
 *secret*
 *credential*
 
 # Project specific
 .pytest_cache/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache
+.cache/
+*.cache
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Flask specific
+instance/
+.webassets-cache
+
+# Data files that might contain sensitive information
+data/
+*.csv
+*.json
+*.xlsx
+*.xls
+
+# Debug and profiling
+.profile
+*.prof
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Backup files
+*.bak
+*.backup
+>>>>>>> 72b17178dc1983970a6b7fbf8500b67ed88a5753
