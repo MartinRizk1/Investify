@@ -1,5 +1,5 @@
-module moneymaker
+module github.com/martinrizk/investify
 
-go 1.24.4
+go 1.20
 
-require github.com/gorilla/mux v1.8.1
+require github.com/gorilla/mux v1.8.0

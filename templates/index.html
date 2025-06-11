@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🚀 Stock Analyzer - AI-Powered Investment Insights</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 10px;
+        }
+        .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+            background: rgba(255, 255, 255, 0.95); 
+            padding: 20px; 
+            border-radius: 20px; 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        /* Responsive breakpoints */
+        @media screen and (max-width: 768px) {
+            body { padding: 5px; }
+            .container { padding: 15px; border-radius: 15px; }
+        }
+        
+        @media screen and (max-width: 480px) {
+            body { padding: 0; }
+            .container { padding: 10px; border-radius: 0; }
+            h1 { font-size: 1.8em; }
+            .subtitle { font-size: 0.9em; }
+        }
+        h1 { 
+            text-align: center; 
+            color: #2c3e50; 
+            margin-bottom: 10px; 
+            font-size: 2.5em;
+            font-weight: 700;
+        }
+        .subtitle { 
+            text-align: center; 
+            color: #7f8c8d; 
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        .search-form {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            border: 2px solid #e9ecef;
+        }
+        input[type="text"] { 
+            width: 100%; 
+            padding: 15px 20px; 
+            font-size: 16px; 
+            border: 2px solid #ddd; 
+            border-radius: 10px; 
+            margin: 10px 0;
+            transition: all 0.3s ease;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+        }
+        button { 
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white; 
+            padding: 15px 30px; 
+            border: none; 
+            border-radius: 10px; 
+            font-size: 16px; 
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+        button:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        .stock-info { 
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            padding: 30px; 
+            border-radius: 15px; 
+            margin: 20px 0;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
+        .stock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .stock-title {
+            font-size: 1.8em;
+            color: #2c3e50;
+            font-weight: 700;
+        }
+        .price-info {
+            text-align: right;
+        }
+        .current-price {
+            font-size: 2em;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        .price-change {
+            font-size: 1.2em;
+            font-weight: 600;
+        }
+        .positive { color: #27ae60; }
+        .negative { color: #e74c3c; }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 25px 0;
+        }
+        .metric-card {
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+            text-align: center;
+        }
+        .metric-label {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .metric-value {
+            color: #2c3e50;
+            font-size: 1.3em;
+            font-weight: 600;
+        }
+        .recommendation {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-top: 25px;
+            text-align: center;
+        }
+        .recommendation h3 {
+            margin-bottom: 10px;
+            font-size: 1.5em;
+        }
+        .recommendation p {
+            font-size: 1.1em;
+            line-height: 1.6;
+        }
+        .ml-prediction {
+            background: linear-gradient(135deg, #2980b9 0%, #6dd5fa 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-top: 25px;
+            text-align: center;
+        }
+        .ml-prediction h3 {
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        .prediction-summary {
+            font-size: 1.1em;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        .prediction-metrics {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            margin: 20px 0;
+            gap: 10px;
+        }
+        .prediction-metric {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            min-width: 120px;
+            backdrop-filter: blur(5px);
+            flex: 1;
+        }
+        .metric-name {
+            display: block;
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+        .metric-value {
+            display: block;
+            font-size: 1.3em;
+            font-weight: bold;
+        }
+        .key-factors {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: left;
+            margin-top: 20px;
+        }
+        .key-factors h4 {
+            margin-bottom: 10px;
+            font-size: 1.1em;
+            text-align: center;
+        }
+        .key-factors ul {
+            padding-left: 20px;
+        }
+        .key-factors li {
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+        .neutral {
+            color: #f0f0f0;
+        }
+        .chart-container {
+            margin: 25px 0;
+            padding: 20px;
+            background: #ffffff;
+            border-radius: 15px;
+            border: 1px solid #e9ecef;
+        }
+        .loading {
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        .error {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .confidence-meter {
+            width: 100%;
+        }
+        .confidence-bar {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            height: 20px;
+            position: relative;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        .confidence-fill {
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            height: 100%;
+            border-radius: 10px;
+            transition: width 1s ease-in-out;
+        }
+        .confidence-text {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+        .direction-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-weight: bold;
+        }
+        .trend-up {
+            background: linear-gradient(45deg, #4CAF50, #8BC34A);
+            color: white;
+        }
+        .trend-down {
+            background: linear-gradient(45deg, #f44336, #e57373);
+            color: white;
+        }
+        .trend-neutral {
+            background: linear-gradient(45deg, #9E9E9E, #BDBDBD);
+            color: white;
+        }
+        .factor-icon {
+            margin-right: 8px;
+        }
+        .prediction-metric {
+            min-width: 150px;
+            flex: 1;
+        }
+        #predictionChart {
+            margin-top: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 10px;
+        }
+        .data-age {
+            font-size: 0.8em; 
+            margin-left: 10px;
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Stock Analyzer</h1>
+        <p class="subtitle">AI-Powered Investment Insights & Real-Time Market Data</p>
+
+        <div class="search-form">
+            <form method="POST">
+                <input type="text" name="ticker" placeholder="Enter company name or ticker (e.g., Apple, TSLA, Google)" value="{{.LastQuery}}" required>
+                <button type="submit">🔍 Analyze Stock</button>
+            </form>
+        </div>
+
+        {{if .Error}}
+        <div class="error">
+            <h3>⚠️ Error</h3>
+            <p>{{.Error}}</p>
+            <p><small>�� <strong>Popular tickers:</strong> AAPL (Apple), GOOGL (Google), TSLA (Tesla), MSFT (Microsoft), AMZN (Amazon)</small></p>
+        </div>
+        {{end}}
+
+        {{if .StockInfo}}
+        <div class="stock-info">
+            <div class="stock-header">
+                <div>
+                    <div class="stock-title">{{.StockInfo.CompanyName}}</div>
+                    <div style="color: #7f8c8d; font-size: 1.1em;">
+                        ({{.StockInfo.Ticker}})
+                        {{if gt .StockInfo.DataAge 0}}
+                        <span class="data-age">Updated {{.StockInfo.DataAge}} seconds ago</span>
+                        {{end}}
+                    </div>
+                </div>
+                <div class="price-info">
+                    <div class="current-price">${{printf "%.2f" .StockInfo.Price}}</div>
+                    <div class="price-change {{if ge .StockInfo.Change 0}}positive{{else}}negative{{end}}">
+                        {{if ge .StockInfo.Change 0}}▲{{else}}▼{{end}} ${{printf "%.2f" .StockInfo.Change}} ({{.StockInfo.ChangePct}})
+                    </div>
+                </div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Open</div>
+                    <div class="metric-value">${{printf "%.2f" .StockInfo.Open}}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">High</div>
+                    <div class="metric-value">${{printf "%.2f" .StockInfo.High}}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Low</div>
+                    <div class="metric-value">${{printf "%.2f" .StockInfo.Low}}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Volume</div>
+                    <div class="metric-value">{{.StockInfo.Volume}}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Market Cap</div>
+                    <div class="metric-value">{{.StockInfo.MarketCap}}</div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="stockChart"></canvas>
+            </div>
+
+            <div class="recommendation">
+                <h3>🤖 AI Recommendation</h3>
+                <p>{{.StockInfo.Recommendation}}</p>
+            </div>
+
+            {{if gt .StockInfo.PredictedPrice 0.0}}
+            <div class="ml-prediction">
+                <h3>🧠 ML Model Prediction</h3>
+                <div class="prediction-details">
+                    <p class="prediction-summary">{{.StockInfo.AIAnalysis}}</p>
+                    
+                    <div class="prediction-metrics">
+                        <div class="prediction-metric">
+                            <span class="metric-name">Current Price</span>
+                            <span class="metric-value">${{printf "%.2f" .StockInfo.Price}}</span>
+                        </div>
+                        
+                        <div class="prediction-metric">
+                            <span class="metric-name">Predicted Price</span>
+                            <span class="metric-value {{if gt .StockInfo.PredictedPrice .StockInfo.Price}}positive{{else if lt .StockInfo.PredictedPrice .StockInfo.Price}}negative{{else}}neutral{{end}}">
+                                ${{printf "%.2f" .StockInfo.PredictedPrice}}
+                                {{if gt .StockInfo.PredictedPrice .StockInfo.Price}}
+                                    ▲
+                                {{else if lt .StockInfo.PredictedPrice .StockInfo.Price}}
+                                    ▼
+                                {{end}}
+                            </span>
+                        </div>
+                        
+                        <div class="prediction-metric">
+                            <div class="confidence-meter">
+                                <span class="metric-name">Confidence</span>
+                                <div class="confidence-bar">
+                                    <div class="confidence-fill" style="width: {{.StockInfo.PredictionConfidence}}%"></div>
+                                    <span class="confidence-text">{{printf "%.1f" .StockInfo.PredictionConfidence}}%</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="prediction-metric">
+                            <span class="metric-name">Direction</span>
+                            <span class="metric-value direction-badge {{if eq .StockInfo.TrendDirection "UP"}}trend-up{{else if eq .StockInfo.TrendDirection "DOWN"}}trend-down{{else}}trend-neutral{{end}}">
+                                {{if eq .StockInfo.TrendDirection "UP"}}↗{{else if eq .StockInfo.TrendDirection "DOWN"}}↘{{else}}→{{end}}
+                                {{if .StockInfo.TrendDirection}}{{.StockInfo.TrendDirection}}{{else}}NEUTRAL{{end}}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    {{if .StockInfo.KeyFactors}}
+                    <div class="key-factors">
+                        <h4>📊 Key Factors</h4>
+                        <ul>
+                            {{range .StockInfo.KeyFactors}}
+                            <li>
+                                <span class="factor-icon">
+                                    {{if contains . "positive"}}✅{{else if contains . "negative"}}⚠️{{else}}ℹ️{{end}}
+                                </span>
+                                {{.}}
+                            </li>
+                            {{end}}
+                        </ul>
+                    </div>
+                    {{end}}
+                </div>
+
+                <canvas id="predictionChart"></canvas>
+            </div>
+            {{end}}
+        </div>
+
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Stock Chart
+            var ctx = document.getElementById('stockChart').getContext('2d');
+            var stockChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['Open', 'Low', 'Current', 'High'],
+                    datasets: [{
+                        label: 'Stock Price',
+                        data: [{{.StockInfo.Open}}, {{.StockInfo.Low}}, {{.StockInfo.Price}}, {{.StockInfo.High}}],
+                        borderColor: '{{if ge .StockInfo.Change 0}}#27ae60{{else}}#e74c3c{{end}}',
+                        backgroundColor: '{{if ge .StockInfo.Change 0}}rgba(39, 174, 96, 0.1){{else}}rgba(231, 76, 60, 0.1){{end}}',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Daily Price Movement - {{.StockInfo.Ticker}}',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toFixed(2);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            {{if gt .StockInfo.PredictedPrice 0.0}}
+            // Prediction Chart
+            var predictionCtx = document.getElementById('predictionChart').getContext('2d');
+            var predictionChart = new Chart(predictionCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Current Price', 'Predicted Price'],
+                    datasets: [{
+                        label: 'Stock Price',
+                        data: [{{.StockInfo.Price}}, {{.StockInfo.PredictedPrice}}],
+                        backgroundColor: [
+                            'rgba(255, 255, 255, 0.5)',
+                            {{if gt .StockInfo.PredictedPrice .StockInfo.Price}}'rgba(76, 175, 80, 0.5)'{{else}}'rgba(244, 67, 54, 0.5)'{{end}}
+                        ],
+                        borderColor: [
+                            'rgba(255, 255, 255, 1)',
+                            {{if gt .StockInfo.PredictedPrice .StockInfo.Price}}'rgba(76, 175, 80, 1)'{{else}}'rgba(244, 67, 54, 1)'{{end}}
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Price Comparison',
+                            color: 'white',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                color: 'white',
+                                callback: function(value) {
+                                    return '$' + value.toFixed(2);
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: 'white'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+            {{end}}
+        });
+        </script>
+        {{end}}
+
+        <div style="text-align: center; margin-top: 30px; color: #7f8c8d;">
+            <p>💡 <strong>Tip:</strong> Set your OpenAI API key as an environment variable <code>OPENAI_API_KEY</code> for advanced AI recommendations!</p>
+        </div>
+    </div>
+</body>
+</html>
