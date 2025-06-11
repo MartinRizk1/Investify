@@ -1,7 +1,0 @@
-# Configuration file for the trading bot
-
-[market]
-data_source = "yfinance"
-
-[trading]
-prediction_threshold = 0.6

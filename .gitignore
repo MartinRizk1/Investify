@@ -1,4 +1,15 @@
-# Python
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/moneymaker
+/bin/
+
+# Python (legacy)
 __pycache__/
 *.py[cod]
 *$py.class
@@ -116,4 +127,8 @@ coverage.xml
 # Backup files
 *.bak
 *.backup
->>>>>>> 72b17178dc1983970a6b7fbf8500b67ed88a5753
+
+# Go build artifacts
+investify
+*.exe
+*.out
