@@ -97,6 +97,10 @@ Please provide a concise recommendation with reasoning based on the data provide
 	req.Header.Set("Authorization", "Bearer "+ai.openAIKey)
 
 	client := &http.Client{Timeout: 30 * time.Second}
+	
+	// Log the request without sensitive information
+	log.Printf("Sending request to OpenAI API for stock: %s", stock.Ticker)
+	
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("OpenAI API request failed: %v", err)

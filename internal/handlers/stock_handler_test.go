@@ -83,7 +83,9 @@ func TestHomeHandler(t *testing.T) {
 			
 			// Just check that we got some response
 			if rr.Body.Len() == 0 {
-				t.Error("Expected non-empty response body")
+				t.Errorf("Expected non-empty response body, got empty body")
+			} else {
+				t.Logf("Response body length: %d, content: %s", rr.Body.Len(), rr.Body.String())
 			}
 		})
 	}

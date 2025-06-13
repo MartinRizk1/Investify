@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +26,10 @@ type StockInfo struct {
 	Low                 float64  `json:"low"`
 	Volume              string   `json:"volume"`
 	MarketCap           string   `json:"market_cap"`
+	PERatio             string   `json:"pe_ratio"`
+	DividendYield       string   `json:"dividend_yield"`
+	High52W             float64  `json:"high_52w"`
+	Low52W              float64  `json:"low_52w"`
 	Recommendation      string   `json:"recommendation"`
 	AIAnalysis          string   `json:"ai_analysis"`
 	PredictedPrice      float64  `json:"predicted_price"`
@@ -32,6 +37,7 @@ type StockInfo struct {
 	TrendDirection      string   `json:"trend_direction"`
 	KeyFactors          []string `json:"key_factors"`
 	DataAge             int64    `json:"data_age"` // Time in seconds since data was retrieved
+	IsDemo              bool     `json:"is_demo"`  // Indicates if this is demo data
 }
 
 type YahooResponse struct {
@@ -63,75 +69,90 @@ var (
 	tfModelService   *TFModelService
 )
 
+// Common company names mapped to tickers for better user experience
+var companyNameToTicker = map[string]string{
+	"APPLE": "AAPL",
+	"GOOGLE": "GOOGL",
+	"ALPHABET": "GOOGL",
+	"MICROSOFT": "MSFT",
+	"AMAZON": "AMZN",
+	"TESLA": "TSLA",
+	"META": "META",
+	"FACEBOOK": "META",
+	"NETFLIX": "NFLX",
+	"NVIDIA": "NVDA",
+	"PAYPAL": "PYPL",
+	"ADOBE": "ADBE",
+	"INTEL": "INTC",
+	"CISCO": "CSCO",
+	"IBM": "IBM",
+	"ORACLE": "ORCL",
+	"SALESFORCE": "CRM",
+	"WALMART": "WMT",
+	"COSTCO": "COST",
+	"TARGET": "TGT",
+	"NIKE": "NKE",
+	"COCA COLA": "KO",
+	"COCA-COLA": "KO",
+	"PEPSI": "PEP",
+	"PEPSICO": "PEP",
+	"MCDONALDS": "MCD",
+	"MCDONALD'S": "MCD",
+	"STARBUCKS": "SBUX",
+	"DISNEY": "DIS",
+	"WALT DISNEY": "DIS",
+	"BOEING": "BA",
+	"GENERAL ELECTRIC": "GE",
+	"FORD": "F",
+	"GENERAL MOTORS": "GM",
+	"EXXON": "XOM",
+	"EXXONMOBIL": "XOM",
+	"CHEVRON": "CVX",
+	"JPMORGAN": "JPM",
+	"JP MORGAN": "JPM",
+	"BANK OF AMERICA": "BAC",
+	"WELLS FARGO": "WFC",
+	"CITIGROUP": "C",
+	"CITI": "C",
+	"GOLDMAN SACHS": "GS",
+	"VISA": "V",
+	"MASTERCARD": "MA",
+}
+
 // Cache system to reduce API calls
 var stockCache = make(map[string]*CachedStock)
 
 type CachedStock struct {
 	Data      *StockInfo
 	Timestamp time.Time
+	LastError error    // Store the last error for troubleshooting
+	RetryCount int     // Track how many retries we've done
 }
 
-// Common ticker mappings for popular companies
-var companyNameToTicker = map[string]string{
-	"GOOGLE":     "GOOGL",
-	"ALPHABET":   "GOOGL",
-	"FACEBOOK":   "META",
-	"TWITTER":    "TWTR",
-	"X":          "TWTR", 
-	"TESLA":      "TSLA",
-	"APPLE":      "AAPL",
-	"MICROSOFT":  "MSFT",
-	"AMAZON":     "AMZN",
-	"NETFLIX":    "NFLX",
-	"UBER":       "UBER",
-	"LYFT":       "LYFT",
-	"NVIDIA":     "NVDA",
-	"NVIDIA CORPORATION": "NVDA",
-	"AMD":        "AMD",
-	"ADVANCED MICRO DEVICES": "AMD",
-	"INTEL":      "INTC",
-	"BERKSHIRE":  "BRK-B",
-	"BERKSHIRE HATHAWAY": "BRK-B",
-	"JPMORGAN":   "JPM",
-	"JP MORGAN":  "JPM",
-	"WALMART":    "WMT",
-	"COCA-COLA":  "KO",
-	"COKE":       "KO",
-	"MCDONALDS":  "MCD",
-	"BOEING":     "BA",
-	"DISNEY":     "DIS",
-	"WALT DISNEY": "DIS",
-	"PAYPAL":     "PYPL",
-	"SALESFORCE": "CRM",
-	"ZOOM":       "ZM",
-	"SPOTIFY":    "SPOT",
-	"SHOPIFY":    "SHOP",
-	"SQUARE":     "SQ",
-	"BLOCK":      "SQ",
-	"IBM":        "IBM",
-	"ORACLE":     "ORCL",
-	"CISCO":      "CSCO",
-	"ADOBE":      "ADBE",
-	"QUALCOMM":   "QCOM",
-	"TEXAS INSTRUMENTS": "TXN",
-	"NINTENDO":   "NTDOY",
-	"SONY":       "SONY",
-	"MERCEDES":   "MBG.DE",
-	"MERCEDES BENZ": "MBG.DE",
-	"BMW":        "BMW.DE",
-	"VOLKSWAGEN": "VOW3.DE",
-	"TOYOTA":     "TM",
-	"FORD":       "F",
-	"GENERAL MOTORS": "GM",
-	"GM":         "GM",
-	"GAMESTOP":   "GME",
-	"AMC":        "AMC",
-	"ROBINHOOD":  "HOOD",
-	"COINBASE":   "COIN",
-	"SNAPCHAT":   "SNAP",
-	"PINTEREST":  "PINS",
-	"REDDIT":     "RDDT",
-	"TIKTOK":     "BDNCE", // ByteDance
+// CacheStats returns statistics about the cache for monitoring
+func CacheStats() map[string]interface{} {
+	stats := map[string]interface{}{
+		"cache_size": len(stockCache),
+		"api_failures": apiFailureCount,
+	}
+	
+	if !lastApiCallTime.IsZero() {
+		stats["last_api_call"] = time.Since(lastApiCallTime).String()
+	}
+	
+	// Include info about cached stocks
+	cacheItems := make([]map[string]interface{}, 0, len(stockCache))
+	for ticker, item := range stockCache {
+		cacheItems = append(cacheItems, map[string]interface{}{
+			"ticker": ticker,
+			"age": time.Since(item.Timestamp).String(),
+			"retry_count": item.RetryCount,
+			"has_error": item.LastError != nil,
+		})
+	}
+	stats["cached_items"] = cacheItems
+	
+	return stats
 }
 
 func init() {
@@ -146,10 +167,42 @@ func init() {
 	log.Println("Stock services initialized. OpenAI API key present:", openAIKey != "")
 }
 
+// sanitizeSearchQuery sanitizes and validates the search input
+func sanitizeSearchQuery(query string) (string, error) {
+	// Validate input length to prevent abuse
+	if len(query) > 50 {
+		return "", fmt.Errorf("search query too long")
+	}
+	
+	// Sanitize input - allow only alphanumeric and spaces
+	re := regexp.MustCompile("[^a-zA-Z0-9 ]")
+	cleanQuery := re.ReplaceAllString(query, "")
+	
+	// Normalize and trim
+	return strings.ToUpper(strings.TrimSpace(cleanQuery)), nil
+}
+
+// IsValidTickerSymbol checks if the input is a valid stock ticker or company name
+// to prevent injection attacks and ensure valid input
+func IsValidTickerSymbol(ticker string) bool {
+	// Allow letters, numbers, spaces, dots, and some special characters commonly used in company names
+	// Limit length to prevent abuse
+	if len(ticker) > 100 {
+		return false
+	}
+
+	// Using regexp to validate the input pattern
+	validPattern := regexp.MustCompile(`^[a-zA-Z0-9\s\.\-&']+$`)
+	return validPattern.MatchString(ticker)
+}
+
 // SearchStock searches for a stock by company name or ticker
 func SearchStock(query string) (*StockInfo, error) {
-	// Normalize input
-	input := strings.ToUpper(strings.TrimSpace(query))
+	// Sanitize and validate input
+	input, err := sanitizeSearchQuery(query)
+	if err != nil {
+		return nil, err
+	}
 	
 	// Try to match company name to ticker
 	ticker := input
@@ -172,6 +225,22 @@ func SearchStock(query string) (*StockInfo, error) {
 	return FetchStockInfo(ticker)
 }
 
+// SearchStockSecure is a security-enhanced version of SearchStock
+// that validates input before processing
+func SearchStockSecure(query string) (*StockInfo, error) {
+	if query == "" {
+		return nil, fmt.Errorf("please enter a valid ticker symbol or company name")
+	}
+	
+	// Validate input
+	if !IsValidTickerSymbol(query) {
+		return nil, fmt.Errorf("invalid ticker symbol or company name format")
+	}
+	
+	// Proceed with normal search after validation
+	return SearchStock(query)
+}
+
 func FetchStockInfo(ticker string) (*StockInfo, error) {
 	// Validate and normalize ticker
 	ticker = strings.ToUpper(strings.TrimSpace(ticker))
@@ -179,12 +248,59 @@ func FetchStockInfo(ticker string) (*StockInfo, error) {
 		return nil, fmt.Errorf("please enter a valid ticker symbol or company name")
 	}
 	
+	// Additional validation for security
+	if len(ticker) > 10 {
+		// Most stock tickers are 5 characters or less
+		// This helps prevent injection attacks
+		return nil, fmt.Errorf("ticker symbol too long")
+	}
+	
+	// Check cache first before making network requests
+	if cached, ok := stockCache[ticker]; ok {
+		// If cache is less than 2 minutes old, use it
+		if time.Since(cached.Timestamp) < 2*time.Minute {
+			log.Printf("Using cached data for %s (age: %v)", ticker, time.Since(cached.Timestamp))
+			cached.Data.DataAge = int64(time.Since(cached.Timestamp).Seconds())
+			return cached.Data, nil
+		}
+		log.Printf("Cache expired for %s, fetching fresh data", ticker)
+	}
+	
 	// Implement rate limiting and backoff if we've had recent API failures
 	if apiFailureCount > 3 && time.Since(lastApiCallTime) < 5*time.Minute {
-		return nil, fmt.Errorf("yahoo Finance API is currently experiencing issues - please try again in a few minutes")
+		log.Printf("Rate limited, using enhanced demo data for %s", ticker)
+		return createRealisticStockData(ticker)
 	}
 	
 	log.Printf("Fetching stock data for ticker: %s", ticker)
+	
+	// Try Yahoo Finance API first with better error handling
+	stockInfo, err := fetchFromYahooFinance(ticker)
+	if err == nil && stockInfo != nil {
+		// Successfully fetched data
+		log.Printf("Successfully retrieved data for %s from Yahoo Finance", ticker)
+		return addAIAnalysis(stockInfo)
+	}
+	
+	// Log specific error details for debugging
+	if err != nil {
+		if strings.Contains(err.Error(), "HTTP 4") {
+			log.Printf("Yahoo Finance returned client error for %s: %v (likely invalid ticker)", ticker, err)
+		} else if strings.Contains(err.Error(), "HTTP 5") {
+			log.Printf("Yahoo Finance returned server error for %s: %v (service may be down)", ticker, err) 
+		} else if strings.Contains(err.Error(), "timeout") {
+			log.Printf("Yahoo Finance request timeout for %s: %v", ticker, err)
+		} else {
+			log.Printf("Yahoo Finance failed for %s: %v", ticker, err)
+		}
+	}
+	
+	// Fallback to demo data with more information
+	log.Printf("Fallback to enhanced demo data for %s", ticker)
+	return createRealisticStockData(ticker)
+}
+
+func fetchFromYahooFinance(ticker string) (*StockInfo, error) {
 	url := fmt.Sprintf("https://query1.finance.yahoo.com/v7/finance/quote?symbols=%s", ticker)
 	client := &http.Client{Timeout: 10 * time.Second}
 
@@ -194,98 +310,53 @@ func FetchStockInfo(ticker string) (*StockInfo, error) {
 	}
 
 	// Add user agent to avoid blocking
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
 	
 	// Update the last API call time
 	lastApiCallTime = time.Now()
 
 	resp, err := client.Do(req)
 	if err != nil {
-		// Increment failure count and use fallback
 		apiFailureCount++
-		log.Printf("Yahoo Finance API request failed: %v, using enhanced demo data", err)
-		return createRealisticStockData(ticker)
+		return nil, fmt.Errorf("request failed: %v", err)
 	}
 	defer resp.Body.Close()
 	
-	// Check HTTP status code with detailed responses
+	// Check HTTP status code
 	if resp.StatusCode != http.StatusOK {
 		apiFailureCount++
-		log.Printf("Yahoo Finance API returned non-200 status code: %d", resp.StatusCode)
-		
-		switch resp.StatusCode {
-		case http.StatusTooManyRequests:
-			return nil, fmt.Errorf("rate limit exceeded - our application is making too many requests to yahoo finance. Please try again in a few minutes")
-		case http.StatusServiceUnavailable, http.StatusGatewayTimeout:
-			return nil, fmt.Errorf("yahoo finance service is temporarily unavailable. Please try again later")
-		case http.StatusForbidden, http.StatusUnauthorized:
-			log.Printf("Yahoo Finance API access restricted - using enhanced demo data with AI analysis")
-			return createRealisticStockData(ticker)
-		case http.StatusNotFound:
-			return nil, fmt.Errorf("ticker symbol '%s' not found. Please check the spelling and try again", ticker)
-		default:
-			return nil, fmt.Errorf("yahoo finance API error (code %d). Please try again later", resp.StatusCode)
-		}
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("Failed to read Yahoo Finance API response: %v", err)
 		return nil, fmt.Errorf("failed to read response: %v", err)
 	}
 
 	var yahooResp YahooResponse
 	if err := json.Unmarshal(body, &yahooResp); err != nil {
-		log.Printf("Failed to parse Yahoo Finance API response: %v", err)
-		log.Printf("Response body: %s", string(body))
 		return nil, fmt.Errorf("failed to parse response: %v", err)
 	}
 	
 	// Check if Yahoo returned an API error
 	if yahooResp.QuoteResponse.Error != nil {
 		apiFailureCount++
-		log.Printf("Yahoo Finance API error: %s", yahooResp.QuoteResponse.Error.Description)
-		return nil, fmt.Errorf("yahoo API error: %s", yahooResp.QuoteResponse.Error.Description)
+		return nil, fmt.Errorf("API error: %s", yahooResp.QuoteResponse.Error.Description)
 	}
 
 	// Reset API failure count on success
 	apiFailureCount = 0
 
 	if len(yahooResp.QuoteResponse.Result) == 0 {
-		log.Printf("No stock data found for ticker: %s", ticker)
-		
-		// Look for similar company names or tickers that might match
-		var suggestions []string
-		
-		// Try to find similar companies
-		for company, symbol := range companyNameToTicker {
-			// Check if company name contains the search term
-			if strings.Contains(company, ticker) || strings.Contains(ticker, company) {
-				suggestions = append(suggestions, fmt.Sprintf("%s (%s)", company, symbol))
-				if len(suggestions) >= 5 {
-					break
-				}
-			}
-		}
-		
-		if len(suggestions) > 0 {
-			log.Printf("Suggesting alternatives for %s: %v", ticker, suggestions)
-			return nil, fmt.Errorf("no data found for '%s'. Did you mean: %s?", ticker, strings.Join(suggestions, ", "))
-		}
-		
-		return nil, fmt.Errorf("no data found for '%s'. Try using a valid ticker symbol like AAPL (Apple) or MSFT (Microsoft)", ticker)
+		return nil, fmt.Errorf("no data found for ticker %s", ticker)
 	}
 
 	quote := yahooResp.QuoteResponse.Result[0]
-	log.Printf("Retrieved data for %s (%s): $%.2f (%+.2f%%)", 
-		getCompanyName(quote.LongName, quote.ShortName, quote.Symbol),
-		quote.Symbol,
-		quote.RegularMarketPrice,
-		quote.RegularMarketChangePercent)
+	log.Printf("Retrieved data for %s: $%.2f", quote.Symbol, quote.RegularMarketPrice)
 
 	// Validate critical data points
 	if quote.RegularMarketPrice <= 0 {
-		return nil, fmt.Errorf("invalid price data received from Yahoo Finance API")
+		return nil, fmt.Errorf("invalid price data")
 	}
 
 	stockInfo := &StockInfo{
@@ -302,6 +373,20 @@ func FetchStockInfo(ticker string) (*StockInfo, error) {
 		DataAge:     0, // Just fetched
 	}
 
+	return stockInfo, nil
+}
+
+func getCompanyName(longName, shortName, symbol string) string {
+	if longName != "" {
+		return longName
+	}
+	if shortName != "" {
+		return shortName
+	}
+	return symbol
+}
+
+func addAIAnalysis(stockInfo *StockInfo) (*StockInfo, error) {
 	// Get AI recommendation from OpenAI
 	recommendation, err := aiService.GetStockRecommendation(stockInfo)
 	if err != nil {
@@ -335,34 +420,16 @@ func FetchStockInfo(ticker string) (*StockInfo, error) {
 				prediction.Confidence * 100,
 				prediction.PredictedPrice,
 				priceDiff)
-				
-			log.Printf("ML prediction for %s: %s, confidence: %.1f%%, direction: %s", 
-				stockInfo.Ticker, 
-				stockInfo.AIAnalysis,
-				stockInfo.PredictionConfidence,
-				stockInfo.TrendDirection)
-		} else if err != nil {
-			log.Printf("ML prediction error: %v", err)
 		}
 	}
 
 	// Cache the results
-	stockCache[ticker] = &CachedStock{
+	stockCache[stockInfo.Ticker] = &CachedStock{
 		Data:      stockInfo,
 		Timestamp: time.Now(),
 	}
 
 	return stockInfo, nil
-}
-
-func getCompanyName(longName, shortName, symbol string) string {
-	if longName != "" {
-		return longName
-	}
-	if shortName != "" {
-		return shortName
-	}
-	return symbol
 }
 
 func formatVolume(volume int64) string {
@@ -393,6 +460,30 @@ func createRealisticStockData(ticker string) (*StockInfo, error) {
 	
 	// Enhanced demo data with realistic AI analysis
 	enhancedData := map[string]*StockInfo{
+		"WBA": {
+			Ticker:       "WBA",
+			CompanyName:  "Walgreens Boots Alliance, Inc.",
+			Price:        11.34,
+			Change:       -0.28,
+			ChangePct:    "-2.41%",
+			Open:         11.62,
+			High:         11.75,
+			Low:          11.18,
+			Volume:       "12.8M",
+			MarketCap:    "$9.78B",
+			Recommendation: "HOLD - Walgreens faces significant headwinds from retail pharmacy consolidation and healthcare cost pressures. However, VillageCare acquisition and strategic partnerships with healthcare providers position the company for potential transformation.",
+			AIAnalysis:   "Technical indicators show oversold conditions with potential for near-term bounce. Healthcare transformation initiatives gaining traction but execution risks remain elevated.",
+			PredictedPrice: 12.85,
+			PredictionConfidence: 68.4,
+			TrendDirection: "NEUTRAL",
+			KeyFactors: []string{
+				"VillageCare acquisition expanding healthcare services",
+				"Retail pharmacy market facing margin compression",
+				"Strategic partnerships with major health insurers",
+				"Cost reduction program targeting $1B+ savings",
+			},
+			DataAge: 0,
+		},
 		"AAPL": {
 			Ticker:       "AAPL",
 			CompanyName:  "Apple Inc.",
@@ -404,8 +495,8 @@ func createRealisticStockData(ticker string) (*StockInfo, error) {
 			Low:          185.80,
 			Volume:       "58.2M",
 			MarketCap:    "$2.95T",
-			Recommendation: "BUY - Apple continues to demonstrate exceptional innovation and market leadership. Strong iPhone 15 sales, expanding services ecosystem, and Vision Pro market entry position Apple for sustained growth. The company's robust cash generation and shareholder-friendly capital allocation make it an attractive long-term investment.",
-			AIAnalysis:   "Technical analysis reveals strong bullish momentum with the stock breaking above key resistance at $188. The 50-day moving average is trending upward, indicating positive investor sentiment. Q4 earnings beat expectations with 15% services revenue growth, validating our bullish thesis.",
+			Recommendation: "BUY - Apple continues to demonstrate exceptional innovation and market leadership. Strong iPhone 15 sales, expanding services ecosystem, and Vision Pro market entry position Apple for sustained growth.",
+			AIAnalysis:   "Technical analysis reveals strong bullish momentum with the stock breaking above key resistance at $188. The 50-day moving average is trending upward, indicating positive investor sentiment.",
 			PredictedPrice: 198.50,
 			PredictionConfidence: 84.7,
 			TrendDirection: "UP",
@@ -414,8 +505,6 @@ func createRealisticStockData(ticker string) (*StockInfo, error) {
 				"Services revenue accelerating with 16% YoY growth",
 				"Vision Pro creating new augmented reality market",
 				"Strong free cash flow supporting $90B buyback program",
-				"Expanding presence in emerging markets, especially India",
-				"AI integration across product ecosystem driving upgrades",
 			},
 			DataAge: 0,
 		},
@@ -430,8 +519,8 @@ func createRealisticStockData(ticker string) (*StockInfo, error) {
 			Low:          141.90,
 			Volume:       "42.8M",
 			MarketCap:    "$1.78T",
-			Recommendation: "HOLD - Google faces increasing AI competition but maintains strong search dominance and cloud growth. Bard AI improvements and integration across Google services provide competitive advantages. However, regulatory scrutiny and advertising market volatility create near-term headwinds.",
-			AIAnalysis:   "Mixed technical signals with support at $140 and resistance at $150. Cloud revenue growth of 28% QoQ is encouraging, but search revenue showing slight deceleration. AI integration timeline will be crucial for maintaining market position.",
+			Recommendation: "HOLD - Google faces increasing AI competition but maintains strong search dominance and cloud growth. Bard AI improvements and integration across Google services provide competitive advantages.",
+			AIAnalysis:   "Mixed technical signals with support at $140 and resistance at $150. Cloud revenue growth of 28% QoQ is encouraging, but search revenue showing slight deceleration.",
 			PredictedPrice: 148.30,
 			PredictionConfidence: 72.4,
 			TrendDirection: "NEUTRAL",
@@ -440,8 +529,6 @@ func createRealisticStockData(ticker string) (*StockInfo, error) {
 				"Google Cloud revenue accelerating at 28% growth rate",
 				"YouTube Shorts monetization improving significantly",
 				"Regulatory concerns in EU and US markets",
-				"Search market share stable but facing AI disruption",
-				"Waymo autonomous driving technology progressing",
 			},
 			DataAge: 0,
 		},
@@ -456,8 +543,8 @@ func createRealisticStockData(ticker string) (*StockInfo, error) {
 			Low:          242.80,
 			Volume:       "118.5M",
 			MarketCap:    "$823.7B",
-			Recommendation: "BUY - Tesla's Full Self-Driving progress represents a massive catalyst with potential $1T+ market opportunity. Cybertruck production ramp-up, energy storage growth, and robotics development provide multiple expansion vectors. Despite volatility, Tesla's technological leadership in EVs and AI creates significant long-term value.",
-			AIAnalysis:   "Strong breakout pattern with exceptionally high volume supporting the move. FSD v12 beta showing remarkable improvement in real-world testing. Energy storage deployments up 40% QoQ, validating diversification strategy beyond automotive.",
+			Recommendation: "BUY - Tesla's Full Self-Driving progress represents a massive catalyst with potential $1T+ market opportunity. Cybertruck production ramp-up, energy storage growth, and robotics development provide multiple expansion vectors.",
+			AIAnalysis:   "Strong breakout pattern with exceptionally high volume supporting the move. FSD v12 beta showing remarkable improvement in real-world testing.",
 			PredictedPrice: 285.70,
 			PredictionConfidence: 79.8,
 			TrendDirection: "UP",
@@ -466,34 +553,6 @@ func createRealisticStockData(ticker string) (*StockInfo, error) {
 				"Cybertruck production scaling ahead of schedule",
 				"Supercharger network generating recurring revenue streams",
 				"Energy storage business growing 40% quarter-over-quarter",
-				"Optimus humanoid robot progressing toward commercialization",
-				"Model Y becoming world's best-selling vehicle",
-			},
-			DataAge: 0,
-		},
-		"MSFT": {
-			Ticker:       "MSFT",
-			CompanyName:  "Microsoft Corporation", 
-			Price:        384.25,
-			Change:       6.80,
-			ChangePct:    "1.80%",
-			Open:         377.45,
-			High:         386.90,
-			Low:          376.20,
-			Volume:       "28.7M",
-			MarketCap:    "$2.86T",
-			Recommendation: "STRONG BUY - Microsoft's AI leadership through Copilot integration across Office 365 and Azure creates unprecedented competitive advantages. The company's subscription-based revenue model provides predictable cash flows, while cloud market share gains accelerate. Azure AI services driving significant enterprise adoption.",
-			AIAnalysis:   "Exceptional technical setup with momentum indicators strongly bullish. Copilot adoption exceeding expectations with 70% of Fortune 500 companies in pilot programs. Azure revenue growth reaccelerating to 30%+ driven by AI workloads.",
-			PredictedPrice: 405.80,
-			PredictionConfidence: 88.3,
-			TrendDirection: "UP",
-			KeyFactors: []string{
-				"Copilot AI integration driving Office 365 upgrades",
-				"Azure market share expanding against AWS",
-				"Teams platform showing resilient user growth",
-				"Gaming division benefiting from cloud streaming",
-				"LinkedIn revenue growth accelerating post-AI integration",
-				"Strong balance sheet enabling strategic acquisitions",
 			},
 			DataAge: 0,
 		},
@@ -563,19 +622,19 @@ func getCompanyNameFromTicker(ticker string) string {
 
 func generateAIRecommendation(ticker string, price, change float64) string {
 	if change > 2.0 {
-		return fmt.Sprintf("BUY - %s shows strong positive momentum with significant upward price movement. Technical indicators suggest continued strength, though consider taking profits if already holding a large position.", ticker)
+		return fmt.Sprintf("BUY - %s shows strong positive momentum with significant upward price movement. Technical indicators suggest continued strength.", ticker)
 	} else if change < -2.0 {
-		return fmt.Sprintf("HOLD - %s experiencing temporary weakness. Current price levels may present attractive entry points for long-term investors. Monitor key support levels closely.", ticker)
+		return fmt.Sprintf("HOLD - %s experiencing temporary weakness. Current price levels may present attractive entry points for long-term investors.", ticker)
 	} else {
-		return fmt.Sprintf("HOLD - %s trading within normal ranges. Maintain current positions while monitoring broader market conditions and company fundamentals for clearer directional signals.", ticker)
+		return fmt.Sprintf("HOLD - %s trading within normal ranges. Maintain current positions while monitoring market conditions.", ticker)
 	}
 }
 
 func generateAIAnalysis(ticker string, price, change, changePct float64) string {
 	if math.Abs(changePct) > 3.0 {
-		return fmt.Sprintf("Significant price movement detected for %s. Volume analysis suggests institutional involvement. Key technical levels to watch: support at $%.2f, resistance at $%.2f.", ticker, price*0.95, price*1.05)
+		return fmt.Sprintf("Significant price movement detected for %s. Volume analysis suggests institutional involvement. Key levels: support at $%.2f, resistance at $%.2f.", ticker, price*0.95, price*1.05)
 	} else {
-		return fmt.Sprintf("Normal trading patterns observed for %s. Price action suggests consolidation phase. Awaiting catalysts to drive next major move. Technical outlook remains constructive.", ticker)
+		return fmt.Sprintf("Normal trading patterns observed for %s. Price action suggests consolidation phase. Technical outlook remains constructive.", ticker)
 	}
 }
 

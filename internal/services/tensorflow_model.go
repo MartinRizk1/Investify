@@ -25,8 +25,19 @@ type StockPrediction struct {
 
 // NewTFModelService creates a new TensorFlow model service
 func NewTFModelService() *TFModelService {
-	// In a real implementation, we would initialize TensorFlow here
-	// Since we don't have actual TF bindings in this example, we'll simulate it
+	// Initialize the Python bridge in the background
+	go func() {
+		bridge := GetPythonBridge()
+		err := bridge.Initialize()
+		if err != nil {
+			log.Printf("Warning: Failed to initialize Python bridge for TensorFlow: %v", err)
+			log.Printf("Using simulated predictions instead of actual TensorFlow model")
+		} else {
+			log.Printf("Successfully initialized Python bridge for TensorFlow models")
+		}
+	}()
+	
+	// We're ready to make predictions, either with the Python bridge or simulated
 	return &TFModelService{
 		modelReady: true,
 	}
@@ -63,6 +74,27 @@ func (tf *TFModelService) PredictStockMovement(stock *StockInfo) (*StockPredicti
 		}
 	}
 
+	// Try to use Python bridge first if available
+	bridge := GetPythonBridge()
+	if bridge != nil {
+		result, err := bridge.PredictStockPrice(stock)
+		if err == nil && result != nil {
+			// Convert Python bridge result to StockPrediction
+			return &StockPrediction{
+				PredictedPrice: result.PredictedPrice,
+				Confidence:     result.Confidence,
+				Direction:      result.Direction,
+				Factors:        result.Factors,
+			}, nil
+		}
+		// Log the error but continue with fallback prediction
+		log.Printf("Python bridge prediction failed for %s: %v. Using fallback prediction.", 
+			stock.Ticker, err)
+	}
+
+	// Fallback to simulated prediction
+	log.Printf("Using simulated prediction for %s", stock.Ticker)
+	
 	// Extract features from the stock data
 	features := tf.extractFeatures(stock)
 	
