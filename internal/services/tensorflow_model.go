@@ -48,38 +48,15 @@ func (tf *TFModelService) PredictStockMovement(stock *StockInfo) (*StockPredicti
 	if !tf.modelReady {
 		return nil, fmt.Errorf("tensorflow model not initialized")
 	}
-
-	// More thorough validation of stock data
-	if stock == nil {
-		return nil, fmt.Errorf("stock data is nil")
-	}
 	
-	if stock.Price <= 0 {
-		return nil, fmt.Errorf("invalid stock price: %.2f", stock.Price)
-	}
-	
-	// Validate other essential fields
-	if stock.Open <= 0 || stock.High <= 0 || stock.Low <= 0 {
-		log.Printf("Warning: Stock %s has potentially invalid OHLC data: Open=%.2f, High=%.2f, Low=%.2f", 
-			stock.Ticker, stock.Open, stock.High, stock.Low)
-		// Try to recover with available data
-		if stock.Open <= 0 {
-			stock.Open = stock.Price
-		}
-		if stock.High <= 0 {
-			stock.High = math.Max(stock.Price, stock.Open) * 1.01 // Add small buffer
-		}
-		if stock.Low <= 0 {
-			stock.Low = math.Min(stock.Price, stock.Open) * 0.99 // Add small buffer
-		}
-	}
-
-	// Try to use Python bridge first if available
+	// Try to use the Python bridge for predictions
 	bridge := GetPythonBridge()
-	if bridge != nil {
-		result, err := bridge.PredictStockPrice(stock)
+	if bridge.initialized {
+		// Make prediction using Python - try our simple analyzer first
+		result, err := bridge.PredictStockPriceWithSimpleAnalyzer(stock.Ticker)
 		if err == nil && result != nil {
-			// Convert Python bridge result to StockPrediction
+			// Use the Python prediction results
+			log.Printf("Using Python-based prediction for %s", stock.Ticker)
 			return &StockPrediction{
 				PredictedPrice: result.PredictedPrice,
 				Confidence:     result.Confidence,
@@ -87,50 +64,101 @@ func (tf *TFModelService) PredictStockMovement(stock *StockInfo) (*StockPredicti
 				Factors:        result.Factors,
 			}, nil
 		}
-		// Log the error but continue with fallback prediction
-		log.Printf("Python bridge prediction failed for %s: %v. Using fallback prediction.", 
-			stock.Ticker, err)
-	}
-
-	// Fallback to simulated prediction
-	log.Printf("Using simulated prediction for %s", stock.Ticker)
-	
-	// Extract features from the stock data
-	features := tf.extractFeatures(stock)
-	
-	// Simulate a prediction with error handling
-	var prediction *StockPrediction
-	// Use defer/recover to handle any potential panic in prediction code
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Printf("Recovered from panic in stock prediction for %s: %v", stock.Ticker, r)
-				prediction = nil
-			}
-		}()
-		prediction = tf.simulatePrediction(stock, features)
-	}()
-
-	// Validate prediction
-	if prediction == nil || prediction.PredictedPrice <= 0 || prediction.Confidence <= 0 {
-		return nil, fmt.Errorf("failed to generate a valid prediction")
-	}
-
-	// Ensure predictions stay within realistic bounds (max 10% change)
-	maxChange := stock.Price * 0.10
-	if math.Abs(prediction.PredictedPrice - stock.Price) > maxChange {
-		if prediction.PredictedPrice > stock.Price {
-			prediction.PredictedPrice = stock.Price + maxChange
-		} else {
-			prediction.PredictedPrice = stock.Price - maxChange
+		
+		// Try the original prediction method as a backup
+		result, err = bridge.PredictStockPrice(stock.Ticker)
+		if err == nil && result != nil {
+			log.Printf("Using TensorFlow-based prediction for %s", stock.Ticker)
+			return &StockPrediction{
+				PredictedPrice: result.PredictedPrice,
+				Confidence:     result.Confidence,
+				Direction:      result.Direction,
+				Factors:        result.Factors,
+			}, nil
 		}
 		
-		// Adjust confidence downward for extreme predictions
-		prediction.Confidence *= 0.85
-		prediction.Factors = append(prediction.Factors, "Extreme prediction detected and adjusted")
+		// Log the error but continue with fallback
+		log.Printf("Python prediction failed: %v, using fallback", err)
 	}
 
-	return prediction, nil
+	// Fallback to simple prediction
+	log.Printf("Using simple prediction for %s", stock.Ticker)
+	
+	// Simple prediction based on price movement
+	changePercent := 0.0
+	if stock.Change != 0 && stock.Price != 0 {
+		changePercent = (stock.Change / stock.Price) * 100
+	}
+	
+	// Simulate some predictive model output
+	randomFactor := (math.Sin(float64(time.Now().Unix())) + 1.0) * 0.5 // 0.0-1.0
+	if randomFactor > 0.5 {
+		changePercent *= 1.2 // Amplify the trend
+	} else {
+		changePercent *= -0.8 // Reverse the trend somewhat
+	}
+	
+	// Predict price (limited to +/- 5%)
+	changePercent = math.Max(-5.0, math.Min(5.0, changePercent))
+	predictedChange := stock.Price * (changePercent / 100.0)
+	predictedPrice := stock.Price + predictedChange
+	
+	// Round to 2 decimal places
+	predictedPrice = math.Round(predictedPrice*100) / 100
+	
+	// Determine direction
+	direction := "NEUTRAL"
+	if predictedChange > 0 {
+		direction = "UP"
+	} else if predictedChange < 0 {
+		direction = "DOWN"
+	}
+	
+	// Generate confidence (60-90%)
+	confidence := 60.0 + (randomFactor * 30.0)
+	
+	// Generate prediction factors
+	factors := []string{}
+	
+	// Price momentum
+	if stock.Change > 0 {
+		factors = append(factors, "Recent positive price momentum")
+	} else if stock.Change < 0 {
+		factors = append(factors, "Recent negative price momentum")
+	}
+	
+	// Price position relative to day's range
+	dayRange := stock.High - stock.Low
+	if dayRange > 0 {
+		pricePosition := (stock.Price - stock.Low) / dayRange
+		if pricePosition > 0.8 {
+			factors = append(factors, "Price near daily high")
+		} else if pricePosition < 0.2 {
+			factors = append(factors, "Price near daily low")
+		}
+	}
+	
+	// Market conditions
+	currentHour := time.Now().Hour()
+	if currentHour < 12 {
+		factors = append(factors, "Morning market conditions")
+	} else if currentHour >= 12 && currentHour < 16 {
+		factors = append(factors, "Afternoon trading patterns")
+	} else {
+		factors = append(factors, "After-hours sentiment")
+	}
+	
+	// If we don't have enough factors, add a generic one
+	if len(factors) < 2 {
+		factors = append(factors, "Based on technical analysis")
+	}
+	
+	return &StockPrediction{
+		PredictedPrice: predictedPrice,
+		Confidence:     confidence,
+		Direction:      direction,
+		Factors:        factors,
+	}, nil
 }
 
 // extractFeatures extracts relevant features from stock data

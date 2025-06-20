@@ -1,175 +1,205 @@
-# Investify - Advanced Stock Analysis Application
+# 🚀 Investify - AI-Powered Stock Analysis Platform
 
-Investify is a Go-based stock analysis application that provides real-time stock data, AI-powered recommendations, and TensorFlow-based price predictions.
+A sophisticated Go-based web application that provides real-time stock information, interactive price charts, and dual AI-powered investment recommendations using Yahoo Finance API data. The platform combines OpenAI's language model for qualitative analysis and a TensorFlow model for quantitative predictions.
 
 ## Features
 
-- **Real-time Stock Data**: Fetch up-to-date stock information from the Yahoo Finance API
-- **AI Analysis**: Get AI-powered stock recommendations and insights
-- **TensorFlow Predictions**: Use machine learning models to predict future stock prices
-- **Beautiful UI**: Modern, responsive interface with charts and animations
+- **Real-time Stock Data**: Fetches live stock prices, market metrics, and company information from Yahoo Finance
+- **Dual AI Analysis**:
+  - OpenAI GPT for qualitative market insights and recommendations
+  - TensorFlow LSTM models for accurate price predictions and trend analysis
+- **Interactive Charts**: Visual price movement representation with day's range and historical data
+- **Beautiful UI**: Modern, responsive design with gradient themes and intuitive layout
+- **Smart Search**: Company name mapping to correct ticker symbols
+- **Technical Indicators**: Price position analysis, volatility metrics, and momentum tracking
+- **AI Confidence Meter**: Visual representation of prediction confidence with key factors
 - **Go-Python Bridge**: Seamless integration between Go backend and Python TensorFlow models
-- **Security-First Design**: Input validation, CSP security headers, and secure API handling
 
-## Architecture
+## Prerequisites
 
-The application has the following components:
-- **Go Backend**: Handles HTTP requests, stock data fetching, and business logic
-- **Python ML Layer**: TensorFlow-based prediction models for stock price analysis
-- **HTML/JS Frontend**: Responsive UI with charts and animations
-- **Go-Python Bridge**: Communication layer between Go and Python
+- Go 1.20 or higher
+- Python 3.7+ (for TensorFlow models)
+- (Optional) OpenAI API key for advanced AI recommendations
 
-## Requirements
+## Installation & Setup
 
-### Basic Requirements
-- Go 1.16+
-- Web browser
-
-### Optional (for ML features)
-- Python 3.8+
-- TensorFlow 2.6+
-- Other Python dependencies listed in `models/requirements.txt`
-
-## Installation
-
-### 1. Clone the repository
+1. Clone the repository
 ```bash
-git clone https://github.com/martinrizk/investify.git
+git clone https://github.com/yourusername/investify.git
 cd investify
 ```
 
-### 2. Install Go dependencies
+2. Install Go dependencies
 ```bash
-go mod download
+make deps
 ```
 
-### 3. Set up Python environment (optional)
+3. Install Python dependencies for TensorFlow models
 ```bash
 make python-setup
 ```
 
-### 4. Build the application
+4. Set OpenAI API key (optional, for enhanced AI recommendations)
+```bash
+export OPENAI_API_KEY=your_api_key_here
+```
+
+5. Build the application
 ```bash
 make build
 ```
 
-### 5. Run the application
-```bash
-./investify
-```
-
-## Development
-
-### Building the application
-```bash
-make build
-```
-
-### Running tests
-```bash
-make test
-```
-
-### Running with hot reload
+6. Run the application
 ```bash
 make run
 ```
 
-## Security
-
-### Environment Variables
-Investify uses environment variables for all sensitive information:
-
-1. Copy the example environment file
-```bash
-cp .env.example .env
+7. Access the application in your browser
+```
+http://localhost:8080
 ```
 
-2. Edit the `.env` file to add your API keys:
+## Advanced: Training TensorFlow Models
+
+1. Train models for specific stocks:
 ```bash
-# OpenAI API Key for AI-powered recommendations
-OPENAI_API_KEY=your_openai_key_here
-```
-
-### Security Features
-- Input validation for all user inputs
-- Content Security Policy (CSP) headers
-- Protected API access points
-- No sensitive data leakage in responses or logs
-- Built-in rate limiting for external API calls
-
-## TensorFlow Integration
-
-The application can work in two modes:
-
-1. **Full Mode**: Using Python TensorFlow models for predictions
-2. **Fallback Mode**: Using Go-based prediction simulations when Python/TensorFlow is not available
-
-### Training TensorFlow Models
-
-```bash
-# Train a quick test model
-make train-test-model
-
-# Train models for popular stocks (takes longer)
 make train-models
 ```
 
-## API Documentation
-
-### GET /health
-Returns the health status of the application
-
-### GET /
-Serves the main application UI
-
-### POST /
-Accepts stock search requests and returns analysis
-
-## Security
-
-### API Keys
-This application uses the following API keys that should be set in your environment:
-
-- `OPENAI_API_KEY`: Required for AI-powered stock recommendations (optional, will use rule-based recommendations if not provided)
-- `PORT`: Optional, defaults to 8080
-
-Create a `.env` file in the root directory by copying the `.env.example` file and filling in your values:
-
+2. Or train a model for a specific ticker:
 ```bash
-cp .env.example .env
-# Edit .env with your API keys
+cd models && python3 train_stock_model.py TICKER
 ```
 
-> ⚠️ **Warning**: Never commit your actual API keys to GitHub. The `.env` file is included in `.gitignore` to prevent accidental commits.
+3. The trained models will be stored in `models/saved/` directory and automatically used by the application.
 
-## GitHub Repository Security
+## Running Tests
 
-When pushing to GitHub, ensure:
+```bash
+make test
+```
 
-1. No sensitive environment variables are committed:
-   ```bash
-   # Check for any potentially sensitive files before commit
-   git diff --cached | grep -i "key\|secret\|password\|credential"
-   ```
+For coverage report:
+```bash
+make test-coverage
+```
 
-2. The `.env.example` file is kept up to date but does not contain real credentials
+## Development
 
-3. Your `.gitignore` file is excluding all sensitive files:
-   ```
-   # Sensitive files
-   .env
-   .env.local
-   *.pem
-   *.key
-   ```
+For hot-reloading during development:
+```bash
+# Install air first if you don't have it
+go install github.com/cosmtrek/air@latest
 
-4. Regularly scan your repository for sensitive information using tools like:
-   - GitHub's secret scanning feature
-   - Git-secrets (https://github.com/awslabs/git-secrets)
+# Run with hot reloading
+air
+```
 
-5. Consider enabling branch protection rules in the GitHub repository settings
+## Error Handling
+
+The application implements robust error handling for:
+- Network failures with Yahoo Finance API
+- Rate limiting scenarios with exponential backoff
+- OpenAI API connectivity issues with fallback recommendations
+- TensorFlow model prediction failures with rule-based alternatives
+- Invalid stock data with auto-repair mechanisms
+
+## Usage
+
+1. Enter a company name or ticker symbol in the search field
+2. View comprehensive stock analysis including:
+   - Current price and day's movement
+   - Key market metrics
+   - AI-powered price prediction
+   - Technical analysis
+   - Investment recommendation
+   - Historical price chart
+   - Confidence meter with key factors
+
+## API Keys Required
+
+For full functionality, set your OpenAI API key:
+```bash
+export OPENAI_API_KEY="your-key-here"
+```
+
+The application will still work without the key, using rule-based recommendations instead of AI-powered ones.
+
+## Project Structure
+
+```
+investify/
+├── cmd/
+│   └── main.go           # Application entry point
+├── internal/
+│   ├── handlers/         # HTTP request handlers
+│   └── services/         # Business logic and data services
+│       ├── ai_service.go # OpenAI API integration
+│       ├── py_bridge.go  # Go-Python bridge
+│       ├── stock_service.go # Yahoo Finance API integration
+│       └── tensorflow_model.go # TensorFlow model integration
+├── models/
+│   ├── predict.py        # Python script for predictions
+│   ├── stock_predict.py  # Advanced prediction model
+│   ├── requirements.txt  # Python dependencies
+│   └── train_stock_model.py # Model training script
+└── templates/            # HTML templates and static assets
+```
+
+## Technologies Used
+
+- **Backend**: Go, Gorilla Mux
+- **APIs**: Yahoo Finance, OpenAI
+- **Machine Learning**: TensorFlow (Python)
+- **Frontend**: HTML, CSS, JavaScript, Chart.js
+
+## Example Stocks to Try
+
+- AAPL (Apple)
+- GOOGL (Alphabet/Google)
+- MSFT (Microsoft)
+- AMZN (Amazon)
+- TSLA (Tesla)
+
+## Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| OPENAI_API_KEY | OpenAI API key | No (optional) |
+| PORT | Server port | No (defaults to 8080) |
+
+## Features in Detail
+
+### Real-time Stock Data
+- Current price and day's change
+- Trading volume and market cap
+- Day's range with position indicator
+- 52-week high and low
+
+### AI Analysis
+- Predicted price based on machine learning models
+- Confidence rating with visual meter
+- Trend direction with visual indicators
+- Key factors influencing the prediction
+
+### Visual Charts
+- Interactive price chart
+- Historical data visualization
+- Prediction markers
+- Technical indicators
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## Disclaimer
+
+This application is for educational purposes only. The AI recommendations and price predictions should not be considered financial advice. Always do your own research before making investment decisions.
 
 ## License
 
-MIT License
+This project is licensed under the MIT License - see the LICENSE file for details.

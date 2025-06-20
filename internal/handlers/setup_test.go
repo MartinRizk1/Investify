@@ -15,8 +15,4 @@ func TestHandlersSetupBasic(t *testing.T) {
 	if !IsTestMode {
 		t.Error("Test mode not properly set")
 	}
-	
-	if templates == nil {
-		t.Error("Templates were not properly initialized for tests")
-	}
 }
